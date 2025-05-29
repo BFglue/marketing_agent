@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статья</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--tg-theme-text-color, #000);
+            background: var(--tg-theme-bg-color, #fff);
+            padding: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .article-header {
+            border-bottom: 2px solid var(--tg-theme-hint-color, #ccc);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .article-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--tg-theme-text-color, #000);
+        }
+        
+        .article-meta {
+            color: var(--tg-theme-hint-color, #666);
+            font-size: 14px;
+        }
+        
+        .article-content {
+            font-size: 16px;
+            line-height: 1.8;
+        }
+        
+        .article-content p {
+            margin-bottom: 16px;
+        }
+        
+        .article-content h1, .article-content h2, .article-content h3 {
+            margin: 24px 0 16px 0;
+            color: var(--tg-theme-text-color, #000);
+        }
+        
+        .article-content h1 {
+            font-size: 24px;
+        }
+        
+        .article-content h2 {
+            font-size: 20px;
+        }
+        
+        .article-content h3 {
+            font-size: 18px;
+        }
+        
+        .article-content ul, .article-content ol {
+            margin: 16px 0 16px 20px;
+        }
+        
+        .article-content li {
+            margin-bottom: 8px;
+        }
+        
+        .article-content blockquote {
+            border-left: 4px solid var(--tg-theme-button-color, #0088cc);
+            padding-left: 16px;
+            margin: 16px 0;
+            font-style: italic;
+            color: var(--tg-theme-hint-color, #666);
+        }
+        
+        .article-content code {
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .article-content pre {
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+        
+        .error {
+            color: #ff4444;
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 68, 68, 0.1);
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .share-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
+            padding: 12px 16px;
+            border-radius: 50px;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: transform 0.2s;
+        }
+        
+        .share-button:hover {
+            transform: scale(1.05);
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+            
+            .article-title {
+                font-size: 24px;
+            }
+            
+            .article-content {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div>Загрузка статьи...</div>
+    </div>
+    
+    <div id="article" style="display: none;">
+        <div class="article-header">
+            <h1 class="article-title" id="articleTitle"></h1>
+            <div class="article-meta" id="articleMeta"></div>
+        </div>
+        <div class="article-content" id="articleContent"></div>
+    </div>
+    
+    <div id="error" class="error" style="display: none;">
+        <strong>Ошибка загрузки статьи</strong><br>
+        Попробуйте обновить страницу
+    </div>
+    
+    <button class="share-button" id="shareButton" onclick="shareArticle()" style="display: none;">
+        📤 Поделиться
+    </button>
+
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Функции для работы со статьей
+        function getArticleId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('id') || tg.initDataUnsafe?.start_parameter;
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        function formatContent(content) {
+            if (!content) return '';
+            
+            // Базовое форматирование markdown
+            return content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/^/, '<p>')
+                .replace(/$/, '</p>')
+                .replace(/<p><\/p>/g, '')
+                .replace(/<p>(<h[1-6]>)/g, '$1')
+                .replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+        }
+        
+        async function loadArticle() {
+            try {
+                const articleId = getArticleId();
+                
+                if (!articleId) {
+                    throw new Error('ID статьи не найден');
+                }
+                
+                // Здесь вы делаете запрос к своему API для получения статьи
+                const response = await fetch(`/api/articles/${articleId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Статья не найдена');
+                }
+                
+                const articleData = await response.json();
+                
+                // Отображаем статью
+                document.getElementById('articleTitle').textContent = articleData.title || 'Без названия';
+                document.getElementById('articleMeta').textContent = formatDate(articleData.created_at);
+                document.getElementById('articleContent').innerHTML = formatContent(articleData.content);
+                
+                // Показываем статью
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('article').style.display = 'block';
+                document.getElementById('shareButton').style.display = 'block';
+                
+                // Уведомляем Telegram о готовности
+                tg.ready();
+                
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+        
+        function shareArticle() {
+            const title = document.getElementById('articleTitle').textContent;
+            const url = window.location.href;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: title,
+                    url: url
+                });
+            } else {
+                // Fallback - копирование в буфер обмена
+                navigator.clipboard.writeText(url).then(() => {
+                    tg.showAlert('Ссылка скопирована в буфер обмена!');
+                });
+            }
+        }
+        
+        // Демо данные для примера (удалите это в продакшене)
+        function loadDemoArticle() {
+            const demoArticle = {
+                title: "Заголовок длинной статьи",
+                content: `# Введение
+
+Это пример длинной статьи, которая не помещается в обычное сообщение Telegram.
+
+## Основная часть
+
+**Жирный текст** и *курсивный текст* отображаются корректно.
+
+### Подзаголовок
+
+Здесь может быть очень много текста:
+
+- Список пункт 1
+- Список пункт 2  
+- Список пункт 3
+
+И еще больше текста для демонстрации возможностей Web App.
+
+\`код в строке\` тоже работает.
+
+## Заключение
+
+Telegram Web App - отличное решение для длинного контента!`,
+                created_at: new Date().toISOString()
+            };
+            
+            document.getElementById('articleTitle').textContent = demoArticle.title;
+            document.getElementById('articleMeta').textContent = formatDate(demoArticle.created_at);
+            document.getElementById('articleContent').innerHTML = formatContent(demoArticle.content);
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('article').style.display = 'block';
+            document.getElementById('shareButton').style.display = 'block';
+        }
+        
+        // Запуск приложения
+        document.addEventListener('DOMContentLoaded', () => {
+            // Для демо используем демо данные
+            // В продакшене замените на: loadArticle();
+            loadDemoArticle();
+        });
+    </script>
+</body>
+</html>
